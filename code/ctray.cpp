@@ -548,7 +548,7 @@ RecomputeGraphic(void)
         }
         else if (InMinute(Current, MainHour.Raw + 60*FILETIME_MINUTE))
         {
-            wsprintf(Line2, "Enterring second hour...");
+            wsprintf(Line2, "Entering second hour...");
             FadeInOut(CountdownWindow);
         }
         else if (InMinute(Current, QAHour.Raw - 5*FILETIME_MINUTE))
