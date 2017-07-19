@@ -488,7 +488,7 @@ ShowCountdown(void)
 #define FILETIME_DAY (24 * FILETIME_HOUR)
 struct hour_options
 {
-    file_time Hours[4];
+    file_time Hours[8];
 };
 static hour_options
 GetHourOptions(void)
@@ -505,14 +505,14 @@ GetHourOptions(void)
     SystemTimeToFileTime(&SysTime, &Time.Win);
     __int64 dMinutes = FILETIME_MINUTE*15;
 
-    Options.Hours[0] = Time;
-    Time.Raw += dMinutes;
-    Options.Hours[1] = Time;
-    Time.Raw += dMinutes;
-    Options.Hours[2] = Time;
-    Time.Raw += dMinutes;
-    Options.Hours[3] = Time;
-
+    for(int HourIndex = 0;
+        HourIndex < sizeof(Options.Hours)/sizeof(Options.Hours[0]);
+        ++HourIndex)
+    {
+        Options.Hours[HourIndex] = Time;
+        Time.Raw += dMinutes;
+    }
+    
     return(Options);
 }
 
@@ -671,6 +671,30 @@ StartSessionAtHourOption3(void)
 }
 
 static void
+StartSessionAtHourOption4(void)
+{
+    ActivateTarget(GetHourOptions().Hours[4]);
+}
+
+static void
+StartSessionAtHourOption5(void)
+{
+    ActivateTarget(GetHourOptions().Hours[5]);
+}
+
+static void
+StartSessionAtHourOption6(void)
+{
+    ActivateTarget(GetHourOptions().Hours[6]);
+}
+
+static void
+StartSessionAtHourOption7(void)
+{
+    ActivateTarget(GetHourOptions().Hours[7]);
+}
+
+static void
 EndSession(void)
 {
     TargetActive = false;
@@ -779,6 +803,10 @@ TrayWindowCallback(HWND Window, UINT Message, WPARAM WParam, LPARAM LParam)
                             StartSessionAtHourOption1,
                             StartSessionAtHourOption2,
                             StartSessionAtHourOption3,
+                            StartSessionAtHourOption4,
+                            StartSessionAtHourOption5,
+                            StartSessionAtHourOption6,
+                            StartSessionAtHourOption7,
                         };
                         hour_options Options = GetHourOptions();
                         for(int HourOptionIndex = 0;
