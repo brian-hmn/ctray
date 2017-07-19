@@ -27,6 +27,8 @@
 
 #include "ctray.h"
 
+#define QAMinuteCount 15
+
 static int TargetActive;
 static file_time TargetHour;
 static int DayNumber;
@@ -501,14 +503,14 @@ GetHourOptions(void)
 
     file_time Time;
     SystemTimeToFileTime(&SysTime, &Time.Win);
-    __int64 ThirtyMinutes = FILETIME_MINUTE*30;
+    __int64 dMinutes = FILETIME_MINUTE*15;
 
     Options.Hours[0] = Time;
-    Time.Raw += ThirtyMinutes;
+    Time.Raw += dMinutes;
     Options.Hours[1] = Time;
-    Time.Raw += ThirtyMinutes;
+    Time.Raw += dMinutes;
     Options.Hours[2] = Time;
-    Time.Raw += ThirtyMinutes;
+    Time.Raw += dMinutes;
     Options.Hours[3] = Time;
 
     return(Options);
@@ -554,12 +556,12 @@ RecomputeGraphic(void)
             wsprintf(Line2, "Q&A begins now.");
             FadeInOut(CountdownWindow);
         }
-        else if(InMinute(Current, QAHour.Raw + 30*FILETIME_MINUTE))
+        else if(InMinute(Current, QAHour.Raw + (QAMinuteCount)*FILETIME_MINUTE))
         {
             wsprintf(Line2, "Stream has ended.");
             FadeInOut(CountdownWindow);
         }
-        else if(InMinute(Current, QAHour.Raw + 31*FILETIME_MINUTE))
+        else if(InMinute(Current, QAHour.Raw + (QAMinuteCount + 1)*FILETIME_MINUTE))
         {
             TargetActive = false;
         }
@@ -880,7 +882,7 @@ WinMain(HINSTANCE hInstance,
         strcpy(DisplayStrings.BiLine, "unknown.stream");
         strcpy(DisplayStrings.CornerTag, "UNKNOWN STREAM    An Unknown Project in FORTRAN66   (unknown.stream)");
     }
-    
+
     Win32RegisterWindowClass(TrayWindowClassName, GetModuleHandle(0), TrayWindowCallback);
 
     TrayWindow = CreateWindowEx(0, TrayWindowClassName, 0, 0,
@@ -922,7 +924,7 @@ WinMain(HINSTANCE hInstance,
         TrayIconData.uCallbackMessage = Win32TrayIconMessage;
         TrayIconData.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(101));
         TrayIconData.szTip[0] = '\0';
-    
+
         Shell_NotifyIcon(NIM_ADD, &TrayIconData);
 
         MSG Message;
@@ -931,7 +933,7 @@ WinMain(HINSTANCE hInstance,
             TranslateMessage(&Message);
             DispatchMessage(&Message);
         }
-        
+
         Shell_NotifyIcon(NIM_DELETE, &TrayIconData);
 
         for(int32x HotKeyIndex = 0;
@@ -942,6 +944,6 @@ WinMain(HINSTANCE hInstance,
             UnregisterHotKey(TrayWindow, HotKeyIndex);
         }
     }
-    
+
     ExitProcess(0);
 }
