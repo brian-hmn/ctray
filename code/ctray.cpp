@@ -187,7 +187,7 @@ Win32ResizeDIBSection(win32_dib_section &This, int32x Width, int32x Height)
                     This.BufferSize - This.TotalBytesPerLine);
 
 #if 0
-            SetUInt32(This.Width * This.Height, 0x00FFFF00, This.PixelBuffer); 
+            SetUInt32(This.Width * This.Height, 0x00FFFF00, This.PixelBuffer);
 
             {for(int32x Y = 0;
                     Y < This.Height;
@@ -200,7 +200,7 @@ Win32ResizeDIBSection(win32_dib_section &This, int32x Width, int32x Height)
                             *(uint32 *)(This.TopOfFrame + Y*This.Stride + (SizeOfPixel*X)) =
                                 0x00FF0F00;
                         }}
-                }}            
+                }}
 #endif
 
             Result = true;
@@ -438,7 +438,7 @@ UpdateCountdownWindowGraphic(char *Line0,
 
     PostClear(DIBSection, true);
 
-    UpdateOverlayImage(CountdownWindow, DrawDC);    
+    UpdateOverlayImage(CountdownWindow, DrawDC);
 }
 
 static void
@@ -467,7 +467,7 @@ UpdateCornerWindowGraphic(char *Line0)
 
     PostClear(DIBSection, false);
 
-    UpdateOverlayImage(CornerWindow, DrawDC);    
+    UpdateOverlayImage(CornerWindow, DrawDC);
 }
 
 static void
@@ -529,7 +529,7 @@ RecomputeGraphic(void)
 {
     file_time MainHour = TargetHour;
     file_time QAHour = TargetHour;
-    QAHour.Raw += FILETIME_HOUR;
+    QAHour.Raw += 2*FILETIME_HOUR;
 
     char Line0[256];
     wsprintf(Line0, DisplayStrings.TitleLine, DayNumber);
@@ -546,7 +546,12 @@ RecomputeGraphic(void)
         {
             wsprintf(Line2, "Stream begins now.");
         }
-        else if (InMinute(Current, MainHour.Raw + 55*FILETIME_MINUTE))
+        else if (InMinute(Current, MainHour.Raw + 60*FILETIME_MINUTE))
+        {
+            wsprintf(Line2, "Enterring second hour...");
+            FadeInOut(CountdownWindow);
+        }
+        else if (InMinute(Current, QAHour.Raw - 5*FILETIME_MINUTE))
         {
             wsprintf(Line2, "Five minute warning!");
             FadeInOut(CountdownWindow);
@@ -575,7 +580,7 @@ RecomputeGraphic(void)
 
             FadeInOut(CountdownWindow);
             wsprintf(Line2, "Stream begins in %d:%02d:%02d...",
-                HoursRemaining, MinutesRemaining, SecondsRemaining);    
+                HoursRemaining, MinutesRemaining, SecondsRemaining);
         }
     }
 
@@ -710,13 +715,13 @@ hot_key HotKeys[] =
 };
 int32x const HotKeyCount = sizeof(HotKeys)/sizeof(HotKeys[0]);
 
-void  
+void
 Win32AddSubMenu(HMENU MenuHandle, char *SubMenuTitle, HMENU SubMenu)
 {
     AppendMenu(MenuHandle, MF_POPUP, UINT(SubMenu), SubMenuTitle);
 }
 
-int32x  
+int32x
 Win32AddMenuItem(HMENU MenuHandle, char *ItemText,
     bool32x Checked, bool32x Enabled,
     void *ExtraData)
@@ -744,7 +749,7 @@ Win32AddMenuItem(HMENU MenuHandle, char *ItemText,
     return(MenuItem.wID);
 }
 
-void  
+void
 Win32AddSeparator(HMENU MenuHandle)
 {
     MENUITEMINFO MenuItem;
@@ -758,7 +763,7 @@ Win32AddSeparator(HMENU MenuHandle)
         true, &MenuItem);
 }
 
-void * 
+void *
 Win32GetMenuItemExtraData(HMENU MenuHandle, int Index)
 {
     MENUITEMINFO MenuItemInfo;
@@ -782,8 +787,8 @@ TrayWindowCallback(HWND Window, UINT Message, WPARAM WParam, LPARAM LParam)
     {
         case Win32TrayIconMessage:
         {
-            switch(LParam)              
-            {                
+            switch(LParam)
+            {
                 case WM_LBUTTONDOWN:
                 {
                     POINT MousePosition = {0, 0};
@@ -884,7 +889,7 @@ TrayWindowCallback(HWND Window, UINT Message, WPARAM WParam, LPARAM LParam)
         default:
         {
             Result = DefWindowProc(Window, Message, WParam, LParam);
-        } break;        
+        } break;
     }
 
     return(Result);
@@ -922,7 +927,7 @@ WinMain(HINSTANCE hInstance,
     int32x CountdownWindowWidth = 1400;
     int32x CountdownWindowHeight = 200;
 
-    Win32ResizeDIBSection(CountdownDIBSection, CountdownWindowWidth, CountdownWindowHeight);    
+    Win32ResizeDIBSection(CountdownDIBSection, CountdownWindowWidth, CountdownWindowHeight);
     CountdownWindow = CreateOverlayWindow(0, ScreenHeight-CountdownWindowHeight,
         CountdownWindowWidth, CountdownWindowHeight);
 
@@ -945,7 +950,7 @@ WinMain(HINSTANCE hInstance,
 
         // Insert ourselves into the system tray
         static NOTIFYICONDATA TrayIconData;
-        TrayIconData.cbSize = sizeof(NOTIFYICONDATA); 
+        TrayIconData.cbSize = sizeof(NOTIFYICONDATA);
         TrayIconData.hWnd = TrayWindow;
         TrayIconData.uID = 0;
         TrayIconData.uFlags = NIF_MESSAGE | NIF_ICON;
