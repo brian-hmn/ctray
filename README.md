@@ -2,7 +2,7 @@
 
 ##  What is it?
 
-![Stream Begins in...](images/stream_begins_in.png)
+![Stream Begins in...](images/stream_begins_in.jpg)
 
 A simple program that Casey uses for his [Handmade Hero][linkHandmadeHero] streams.  It's a system tray program that has two overlay windows.  The Countdown overlay, to show the current day and that pops up at given intervals (like 5 minute warning, Q&A begins now, etc).
 
