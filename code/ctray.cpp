@@ -279,6 +279,9 @@ Win32BlitDIBToDC(win32_dib_section &This, int32x FromX, int32x FromY, int32x Wid
 #define SETTIMER_HOUR (60 * SETTIMER_MINUTE)
 #define SETTIMER_DAY (24 * SETTIMER_HOUR)
 
+// If we don't add the ./ to the front of the file that we mean the current
+// directory, both Get and WritePrivateProfileString functions will look
+// in the Windows directory.
 static char *CtraySettingsFile           = "./settings.ctray";
 static char *CtraySettingsDisplaySection = "Display";
 
@@ -486,22 +489,22 @@ UpdateCornerWindowGraphic(char *Line0)
 static void
 Win32ShowNotification(LPCTSTR message, LPCTSTR title, DWORD flags, HICON icon)
 {
-    BOOL ret;
-    NOTIFYICONDATAA data = {0};
-    data.cbSize = sizeof(data);
-    data.hWnd = TrayWindow;
-    data.uFlags = NIF_INFO;
-    data.dwInfoFlags = flags | (icon ? NIIF_LARGE_ICON : 0);
-    data.hBalloonIcon = icon;
+    NOTIFYICONDATAA Data = {0};
+    // NOTE(bk):  Apparently sizeof does not work for Windows versions less than Vista
+    Data.cbSize = sizeof(Data);
+    Data.hWnd = TrayWindow;
+    Data.uFlags = NIF_INFO;
+    Data.dwInfoFlags = flags | (icon ? NIIF_LARGE_ICON : 0);
+    Data.hBalloonIcon = icon;
 
-    strcpy(data.szInfo, message);
-    strcpy(data.szInfoTitle, title ? title : "ctray");
+    strncpy(Data.szInfo, message, _countof(Data.szInfo));
+    strncpy(Data.szInfoTitle, title ? title : "ctray", _countof(Data.szInfoTitle));
 
-    ret = Shell_NotifyIconA(NIM_MODIFY, &data);
-    assert(ret);
+    BOOL Ret = Shell_NotifyIconA(NIM_MODIFY, &Data);
+    assert(Ret);
 }
 
-static BOOL
+inline BOOL
 Win32FileExists(LPCTSTR Path)
 {
     DWORD FileAttributes = GetFileAttributes(Path);
@@ -518,7 +521,7 @@ Win32ErrorMessage(DWORD ErrorCode)
 {
     LPVOID Message;
 
-    //  See Raymond Chen's blog for why we cannot use FORMAT_MESSAGE_IGNORE_INSERTS
+    //  See Raymond Chen's blog for why use FORMAT_MESSAGE_IGNORE_INSERTS
     //  ref:  https://blogs.msdn.microsoft.com/oldnewthing/20071128-00/?p=24353/
     FormatMessage(
         FORMAT_MESSAGE_ALLOCATE_BUFFER |
@@ -565,7 +568,7 @@ EditCtraySettings(LPCTSTR Section, LPCTSTR Key, LPCTSTR Value)
         char TempFilePath[MAX_PATH];
 
         GetTempFileName(".",        // Current directory.
-                        "SET",      // up to 3-character prefix of the temp file.
+                        "SET",      // The 3-character prefix of the temp file.
                         0,          // Unique identifier.  If 0, current system time will be used.
                                     // Only if 0 is used will the system verify the uniqueness.
                         TempFilePath);
