@@ -279,6 +279,9 @@ Win32BlitDIBToDC(win32_dib_section &This, int32x FromX, int32x FromY, int32x Wid
 #define SETTIMER_HOUR (60 * SETTIMER_MINUTE)
 #define SETTIMER_DAY (24 * SETTIMER_HOUR)
 
+static char *CtraySettingsFile           = "./settings.ctray";
+static char *CtraySettingsDisplaySection = "Display";
+
 static char *TrayWindowClassName = "CTrayTrayWindowClassName";
 static HWND TrayWindow;
 
@@ -478,6 +481,133 @@ UpdateCornerWindowGraphic(char *Line0)
     PostClear(DIBSection, false);
 
     UpdateOverlayImage(CornerWindow, DrawDC);
+}
+
+static void
+Win32ShowNotification(LPCTSTR message, LPCTSTR title, DWORD flags, HICON icon)
+{
+    BOOL ret;
+    NOTIFYICONDATAA data = {0};
+    data.cbSize = sizeof(data);
+    data.hWnd = TrayWindow;
+    data.uFlags = NIF_INFO;
+    data.dwInfoFlags = flags | (icon ? NIIF_LARGE_ICON : 0);
+    data.hBalloonIcon = icon;
+
+    strcpy(data.szInfo, message);
+    strcpy(data.szInfoTitle, title ? title : "ctray");
+
+    ret = Shell_NotifyIconA(NIM_MODIFY, &data);
+    assert(ret);
+}
+
+static BOOL
+Win32FileExists(LPCTSTR Path)
+{
+    DWORD FileAttributes = GetFileAttributes(Path);
+
+    BOOL Result = (FileAttributes != INVALID_FILE_ATTRIBUTES &&
+                   !(FileAttributes & FILE_ATTRIBUTE_DIRECTORY));
+
+    return (Result);
+}
+
+//  NOTE:  Caller must use LocalFree() on the returned LPCTSTR buffer.
+LPCTSTR
+Win32ErrorMessage(DWORD ErrorCode)
+{
+    LPVOID Message;
+
+    //  See Raymond Chen's blog for why we cannot use FORMAT_MESSAGE_IGNORE_INSERTS
+    //  ref:  https://blogs.msdn.microsoft.com/oldnewthing/20071128-00/?p=24353/
+    FormatMessage(
+        FORMAT_MESSAGE_ALLOCATE_BUFFER |
+        FORMAT_MESSAGE_FROM_SYSTEM |
+        FORMAT_MESSAGE_IGNORE_INSERTS,
+        // lpSource is ignored when we don't use either
+        // FORMAT_MESSAGE_FROM_HMODULE or FORMAT_MESSAGE_FROM_STRING
+        NULL,
+        ErrorCode,
+        MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+        (LPTSTR)&Message,
+        //  Minimum size for output buffer.
+        0,
+        NULL);
+
+    return ((LPCTSTR)Message);
+}
+
+//  Once our system tray has been created, we can post any windows error messages
+//  to the notification bubble.
+static void
+Win32ShowErrorNotification(LPCTSTR Title, LPCTSTR Description, LPCTSTR Item)
+{
+    LPCSTR ErrorMessage = Win32ErrorMessage(GetLastError());
+
+    // 256 is the max message (szInfo) for system tray bubble.
+    char Buffer[256];
+    wsprintf(Buffer, "%s %s: %s", Description, Item, ErrorMessage);
+
+    Win32ShowNotification(Buffer, Title, NIIF_ERROR, NULL);
+    LocalFree((LPVOID)ErrorMessage);
+}
+
+//  A helper function that will either create the CtraySettingsFile, or
+//  will first make a temp file, make the changes and then replace.
+static void
+EditCtraySettings(LPCTSTR Section, LPCTSTR Key, LPCTSTR Value)
+{
+    LPCTSTR Settings = CtraySettingsFile;
+
+    if (Win32FileExists(Settings))
+    {
+        //  GetTempFileName documentation recommends using MAX_PATH.
+        char TempFilePath[MAX_PATH];
+
+        GetTempFileName(".",        // Current directory.
+                        "SET",      // up to 3-character prefix of the temp file.
+                        0,          // Unique identifier.  If 0, current system time will be used.
+                                    // Only if 0 is used will the system verify the uniqueness.
+                        TempFilePath);
+
+        if (CopyFile(Settings, TempFilePath, false))
+        {
+            if (WritePrivateProfileString(Section, Key, Value, TempFilePath))
+            {
+                if (MoveFileEx(TempFilePath, Settings, MOVEFILE_REPLACE_EXISTING | 
+                                                       MOVEFILE_WRITE_THROUGH))
+                {
+                    // We successfully wrote the settings change to our settings file.
+                    return;
+                }
+                else
+                {
+                    Win32ShowErrorNotification("Edit settings", "Failed to replace", Settings);
+                }
+            }
+            else
+            {
+                Win32ShowErrorNotification("Edit settings", "Failed to update", Settings);
+            }
+        }
+        else
+        {
+            Win32ShowErrorNotification("Edit settings", "Failed to copy", Settings);
+        }
+
+        // If we got here, the temp file still exists.  Let's try to delete it,
+        // but we don't care if it fails.
+        DeleteFile(TempFilePath);
+    }
+    else
+    {
+        // NOTE(bk):  This function will create the file if it does not exist,
+        //            and it will also create the section as well.
+        if (!WritePrivateProfileString(Section, Key, Value, Settings))
+        {
+            Win32ShowErrorNotification("Create settings", "Failed to create", Settings);
+        }
+    }
 }
 
 static void
@@ -723,6 +853,10 @@ ActivateTarget(file_time NewTargetHour)
     ++DayNumber;
     TargetHour = NewTargetHour;
     TargetActive = true;
+
+    char Buffer[16];
+    wsprintf(Buffer, " %d", DayNumber);
+    EditCtraySettings(CtraySettingsDisplaySection, "Day", Buffer);
 }
 
 static void
@@ -988,22 +1122,31 @@ WinMain(HINSTANCE hInstance,
     LPSTR lpCmdLine,
     int nCmdShow)
 {
-    FILE *Settings = fopen("settings.ctray", "r");
-    if(Settings)
+    LPCTSTR Settings = CtraySettingsFile;
+    if (!Win32FileExists(Settings))
     {
-        fgets(DisplayStrings.TitleLine, sizeof(DisplayStrings.TitleLine), Settings);
-        fgets(DisplayStrings.BiLine, sizeof(DisplayStrings.BiLine), Settings);
-        fgets(DisplayStrings.CornerTag, sizeof(DisplayStrings.CornerTag), Settings);
-        fclose(Settings);
-    }
-    else
-    {
-        strcpy(DisplayStrings.TitleLine, "UNKNOWN STREAM - Day %d");
-        strcpy(DisplayStrings.BiLine, "unknown.stream");
-        strcpy(DisplayStrings.CornerTag, "UNKNOWN STREAM    An Unknown Project in FORTRAN66   (unknown.stream)");
+        // TODO(bk):  Log error.
     }
 
-    TopmostCheckInSeconds = 30;
+    // TODO(bk):  I am not checking if the keys were not found.
+    //            The default will be used for now and that's good enough.
+    GetPrivateProfileString(CtraySettingsDisplaySection, "TitleLine", "UNKNOWN STREAM - Day %d",
+        DisplayStrings.TitleLine, sizeof(DisplayStrings.TitleLine), Settings);
+    GetPrivateProfileString(CtraySettingsDisplaySection, "BiLine", "unknown.stream",
+        DisplayStrings.BiLine, sizeof(DisplayStrings.BiLine), Settings);
+    GetPrivateProfileString(CtraySettingsDisplaySection, "CornerTag", "UNKNOWN STREAM    An Unknown Project in FORTRAN66   (unknown.stream)",
+        DisplayStrings.CornerTag, sizeof(DisplayStrings.CornerTag), Settings);
+    DayNumber = GetPrivateProfileInt(CtraySettingsDisplaySection, "Day", 0, Settings);
+    TopmostCheckInSeconds = GetPrivateProfileInt(CtraySettingsDisplaySection, 
+        "TopmostCheckInSeconds", 30, Settings);
+
+    // NOTE(bk):  We assume that a value of 0 or less simply means
+    //            that the Topmost check will be disabled.
+    if (TopmostCheckInSeconds < 0)
+    {
+        TopmostCheckInSeconds = 0;
+        // TODO(bk):  Log that it is an invalid amount.
+    }
 
     Win32RegisterWindowClass(TrayWindowClassName, GetModuleHandle(0), TrayWindowCallback);
 

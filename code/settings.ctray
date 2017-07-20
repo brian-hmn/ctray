@@ -1,3 +1,7 @@
-Handmade Hero - Day %d
-handmadehero.org
-Handmade Hero     A Full Game & Engine in C++     (handmadehero.org)
+[Display]
+TitleLine = Handmade Hero - Day %d
+BiLine = handmadehero.org
+CornerTag = Handmade Hero     A Full Game & Engine in C++     (handmadehero.org)
+Day = 400
+;  Set to 0 if you want to disable check.
+TopmostCheckInSeconds = 30
