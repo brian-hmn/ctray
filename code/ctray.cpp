@@ -33,6 +33,7 @@ static int TargetActive;
 static file_time TargetHour;
 static int DayNumber;
 static display_strings DisplayStrings;
+static int TopmostCheckInSeconds = 15;
 
 #define Allocate(type) (type *)malloc(sizeof(type))
 #define Deallocate(Pointer) free(Pointer)
@@ -265,6 +266,15 @@ Win32BlitDIBToDC(win32_dib_section &This, int32x FromX, int32x FromY, int32x Wid
 }
 
 #include "ctray_overlay_window.cpp"
+
+#define RECOMPUTE_GRAPHIC_TIMER_ID  1
+#define CHECK_TOPMOST_TIMER_ID      2
+
+#define SETTIMER_MILLISECOND ((UINT)1)
+#define SETTIMER_SECOND (1000 * SETTIMER_MILLISECOND)
+#define SETTIMER_MINUTE (60 * SETTIMER_SECOND)
+#define SETTIMER_HOUR (60 * SETTIMER_MINUTE)
+#define SETTIMER_DAY (24 * SETTIMER_HOUR)
 
 #define Win32TrayIconMessage (WM_USER + 1)
 #define Win32SocketMessage (WM_USER + 2)
@@ -777,6 +787,69 @@ Win32GetMenuItemExtraData(HMENU MenuHandle, int Index)
     return((void *)MenuItemInfo.dwItemData);
 }
 
+static void
+BringOverlaysToFront(void)
+{
+    // NOTE(bk):  Using SWP_NOMOVE | SWP_NOSIZE ignores the 3rd to 6th parameters.
+    // TODO(bk):  Investigate BringWindowToTop.  I've read conflicting reports 
+    //            about its uses though it could simply be people not fully understanding
+    //            its purpose.  The MSDN documentation says it is similar to SetWindowPos.
+    SetWindowPos(CountdownWindow->Handle, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+    SetWindowPos(CornerWindow->Handle, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+}
+
+struct ctray_overlay_windows
+{
+    // NOTE(bk):  I dunno if this is the most appropriate way of storing the information.
+    //            I needed something simple that would store if I've checked against each
+    //            window.
+    HWND Corner;
+    bool CornerChecked;
+    HWND Countdown;
+    bool CountdownChecked;
+};
+
+bool CALLBACK
+Win32EnumWindowsProc(HWND Window, LPARAM LParam)
+{
+    bool Continue = TRUE;
+    ctray_overlay_windows *Windows = (ctray_overlay_windows*)LParam;
+
+    if (Windows->Corner == Window)
+    {
+        Windows->CornerChecked = true;
+    }
+    else if (Windows->Countdown == Window)
+    {
+        Windows->CountdownChecked = true;
+    }
+    else
+    {
+        if (IsWindowVisible(Window))
+        {
+            Continue = FALSE;
+            BringOverlaysToFront();
+        }
+    }
+
+    if (Windows->CornerChecked && Windows->CountdownChecked)
+    {
+        Continue = FALSE;
+    }
+
+    return (Continue);
+}
+
+static void
+CheckIfTopMostWindows(void)
+{
+    ctray_overlay_windows Windows = {0};
+    Windows.Corner = CornerWindow->Handle;
+    Windows.Countdown = CountdownWindow->Handle;
+
+    EnumWindows((WNDENUMPROC)Win32EnumWindowsProc, (LPARAM)&Windows);
+}
+
 typedef void menu_callback(void);
 LRESULT CALLBACK
 TrayWindowCallback(HWND Window, UINT Message, WPARAM WParam, LPARAM LParam)
@@ -869,14 +942,26 @@ TrayWindowCallback(HWND Window, UINT Message, WPARAM WParam, LPARAM LParam)
 
         case WM_CREATE:
         {
-            SetTimer(Window, 1, 100, 0);
+            SetTimer(Window, RECOMPUTE_GRAPHIC_TIMER_ID, 100*SETTIMER_MILLISECOND, 0);
+            if(TopmostCheckInSeconds > 1)
+            {
+                SetTimer(Window, CHECK_TOPMOST_TIMER_ID, 
+                         (UINT)TopmostCheckInSeconds*SETTIMER_SECOND, 0);
+            }
         } break;
-
+        
         case WM_TIMER:
         {
-            RecomputeGraphic();
+            if (WParam == RECOMPUTE_GRAPHIC_TIMER_ID)
+            {
+                RecomputeGraphic();
+            }
+            else if (WParam == CHECK_TOPMOST_TIMER_ID)
+            {
+                CheckIfTopMostWindows();
+            }
         } break;
-
+        
         case WM_HOTKEY:
         {
             int32x HotKeyIndex = WParam;
